@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,3 +30,15 @@ jobs:
         with:
           name: stock-pl-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Publish APK to apk branch
+        run: |
+          mkdir out
+          cp app/build/outputs/apk/debug/app-debug.apk out/stock-pl-debug.apk
+          cd out
+          git init -q -b apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stock-pl-debug.apk
+          git commit -q -m "Debug APK from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk
