@@ -32,6 +32,8 @@ jobs:
             "https://query1.finance.yahoo.com/v8/finance/chart/2330.TW?interval=1m&range=1d" > out/yahoo-2330-status.txt || true
           curl -s -A "$UA" -o out/yahoo-9999.json -w "%{http_code}\n" \
             "https://query1.finance.yahoo.com/v8/finance/chart/9999.TW?interval=1m&range=1d" > out/yahoo-9999-status.txt || true
+          curl -s -A "$UA" -o out/yahoo-2330-zh.json -w "%{http_code}\n" \
+            "https://query1.finance.yahoo.com/v8/finance/chart/2330.TW?interval=1m&range=1d&lang=zh-Hant-TW&region=TW" > out/yahoo-2330-zh-status.txt || true
 
       - name: Enable KVM
         run: |
@@ -46,6 +48,7 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
+          profile: pixel_6
           script: bash .github/scripts/verify.sh
 
       - name: Publish results to verify branch
