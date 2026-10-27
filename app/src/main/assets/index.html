@@ -278,6 +278,26 @@ tr.fee td:first-child{padding-left:12px;color:var(--muted)}
       </div>
     </form>
 
+    <section class="card" aria-labelledby="importTitle">
+      <div class="portfolio-head">
+        <h2 id="importTitle">CSV 匯入組合</h2>
+        <span class="count">最多 30 筆</span>
+      </div>
+      <p class="hint">選擇 CSV 後會附加到現有組合，不會刪除原本資料。</p>
+      <div class="import-actions">
+        <label class="file-button" for="csvFile">選擇 CSV 檔案</label>
+        <input id="csvFile" type="file" accept=".csv,text/csv,text/comma-separated-values" hidden>
+      </div>
+      <details class="import-help">
+        <summary>查看 CSV 欄位與範例</summary>
+        <pre class="csv-sample">code,buy_price,shares,buy_date,type,name
+2330,580,1000,2026-01-15,stock,台積電
+0050,190.5,500,2026-03-10,etf,元大台灣50</pre>
+        <p class="hint">必填：code、buy_price、shares。選填：buy_date、type、name；type 可填 stock 或 etf。</p>
+      </details>
+      <p class="import-status" id="importStatus" role="status"></p>
+    </section>
+
     <section class="card" id="chartCard" hidden aria-label="K 線圖">
       <div class="chart-head">
         <div class="title">
@@ -306,19 +326,6 @@ tr.fee td:first-child{padding-left:12px;color:var(--muted)}
       </div>
       <p class="portfolio-empty" id="portfolioEmpty">尚無部位，請從上方加入股票。</p>
       <div class="portfolio-list" id="portfolioList"></div>
-      <div class="import-actions">
-        <label class="file-button" for="csvFile">匯入 CSV</label>
-        <input id="csvFile" type="file" accept=".csv,text/csv,text/comma-separated-values" hidden>
-        <span class="hint">匯入資料會附加至現有組合</span>
-      </div>
-      <details class="import-help">
-        <summary>CSV 欄位與範例</summary>
-        <pre class="csv-sample">code,buy_price,shares,buy_date,type,name
-2330,580,1000,2026-01-15,stock,台積電
-0050,190.5,500,2026-03-10,etf,元大台灣50</pre>
-        <p class="hint">必填：code、buy_price、shares。選填：buy_date、type、name；type 可填 stock 或 etf。</p>
-      </details>
-      <p class="import-status" id="importStatus" role="status"></p>
       <div class="portfolio-summary" id="portfolioSummary" hidden>
         <div><span class="label-sm">總投入成本</span><span class="v" id="portfolioCost">—</span></div>
         <div><span class="label-sm">預估賣出淨額</span><span class="v" id="portfolioNet">—</span></div>
