@@ -109,8 +109,14 @@ def price_now():
     return float(text("qPrice").replace(",", ""))
 
 
+def current_tax():
+    return js("parseFloat(document.querySelector('#kind button[aria-pressed=\"true\"]').dataset.tax)")
+
+
 def verify_calc(label, buy, shares, fee_on, tax_rate):
     now = price_now()
+    if tax_rate is None:
+        tax_rate = current_tax()
     e = expected(buy, shares, now, fee_on, tax_rate)
     got_pl, got_ret = text("pl").replace("元", "").strip(), text("ret")
     ok = got_pl == fmt_money(e["pl"]) and got_ret == fmt_pct(e["ret"])
@@ -131,6 +137,8 @@ check("2. 欄位空白時按 GO 會提示錯誤", all(k in err for k in ["股票
 set_val("code", "2330")
 found = wait_for("!!document.querySelector('#org .name')", 20)
 check("3. 輸入代號 2330 自動查到公司", found, text("org"))
+check("3a. 2330 依行情類別自動帶入一般股票 0.3%",
+      "已依行情類別帶入" in text("kindHint") and current_tax() == 0.003, f"{text('kindHint')}；稅率 {current_tax()}")
 
 set_val("buy", "2200")
 click('#quick button[data-shares="1000"]')
@@ -166,6 +174,19 @@ time.sleep(0.5)
 check("10. 改代號後舊結果作廢、提示重新按 GO",
       text("pill") == "—" and "代號已變更" in text("insight"), text("insight"))
 
+set_val("code", "0050")
+wait_for("document.getElementById('kindHint').textContent.includes('已依行情類別帶入') || document.getElementById('kindHint').textContent.includes('無法自動判斷')", 20)
+time.sleep(0.5)
+check("10a. ETF 0050 自動帶入證交稅 0.1%", current_tax() == 0.001, f"{text('org')}；{text('kindHint')}；稅率 {current_tax()}")
+set_val("buy", "150")
+set_val("shares", "1000")
+go_and_wait()
+ok_etf = js("!document.getElementById('quoteBox').hidden") and text("pill") != "—"
+check("10b. ETF 0050 取得報價", ok_etf, f"現價 {text('qPrice')}；{text('err')}")
+if ok_etf:
+    verify_calc("10c. ETF 盈虧計算正確（證交稅 0.1%）", 150, 1000, False, 0.001)
+shot("2b-etf")
+
 set_val("code", "6488")
 wait_for("!!document.querySelector('#org .name')", 20)
 set_val("buy", "400")
@@ -174,7 +195,8 @@ go_and_wait()
 ok_otc = js("!document.getElementById('quoteBox').hidden") and text("pill") != "—"
 check("11. 上櫃股票 6488 查得到報價", ok_otc, f"公司：{text('org')}；現價 {text('qPrice')}；{text('err')}")
 if ok_otc:
-    verify_calc("12. 上櫃股票盈虧計算正確", 400, 1000, False, 0.003)
+    verify_calc("12. 上櫃股票盈虧計算正確", 400, 1000, False, None)
+check("12a. 上櫃股票類別判斷為一般股票 0.3%", current_tax() == 0.003, f"{text('kindHint')}；稅率 {current_tax()}")
 shot("3-otc")
 
 set_val("code", "9999")

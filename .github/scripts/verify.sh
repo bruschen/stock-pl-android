@@ -4,7 +4,7 @@ set -x
 OUT=out
 mkdir -p $OUT
 PKG=tw.beyondai.stockpl
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app-debug.apk
 adb logcat -c
 adb shell am start -W -n $PKG/.MainActivity
 sleep 15
