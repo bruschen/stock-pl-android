@@ -1,5 +1,6 @@
 package tw.beyondai.stockpl
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -31,6 +32,7 @@ internal object YahooFinance {
     private var csrf = false
 
     private val suffixes = listOf(".TW", ".TWO")
+    private val SEARCH_CODE_RE = Regex("^\\d{4,6}[A-Z]?$")
 
     private val timeFormat = object : ThreadLocal<SimpleDateFormat>() {
         override fun initialValue() = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.TAIWAN).apply {
@@ -71,6 +73,126 @@ internal object YahooFinance {
             return charted
         }
         return errorJson("查無此代號，請確認是否為上市或上櫃股票")
+    }
+
+    /**
+     * 代號自動完成。[query] 是使用者打到一半的代號，例如 233。
+     * 回傳 {"items":[{code,name,market,type}]}，只留上市 .TW 與上櫃 .TWO。
+     * Yahoo 搜尋只給英文名，有 crumb 時再用一次批次報價換成中文名；換不到就用英文名。
+     */
+    @Synchronized
+    fun search(query: String): JSONObject {
+        val res = http(
+            "GET",
+            "$QUERY2/v1/finance/search?q=${enc(query)}&quotesCount=15&newsCount=0&listsCount=0" +
+                "&enableFuzzyQuery=false&quotesQueryId=tss_match_phrase_query&lang=zh-TW&region=TW"
+        )
+        if (res.body.contains("Will be right back")) return errorJson("Yahoo 正在維護，請稍後再試")
+        if (res.status == 429 || res.body.contains("Too Many Requests")) return rateLimit()
+        if (res.status !in 200..299) return errorJson("搜尋失敗（HTTP ${res.status}）")
+        val quotes = try {
+            JSONObject(res.body).optJSONArray("quotes")
+        } catch (_: Exception) {
+            null
+        } ?: return JSONObject().put("items", JSONArray())
+
+        val items = ArrayList<JSONObject>()
+        for (i in 0 until quotes.length()) {
+            val row = quotes.optJSONObject(i) ?: continue
+            val symbol = row.optString("symbol")
+            val suffix = suffixes.firstOrNull { symbol.endsWith(it) } ?: continue
+            val code = symbol.removeSuffix(suffix)
+            if (!SEARCH_CODE_RE.matches(code) || items.any { it.optString("code") == code }) continue
+            suffixCache[code] = suffix
+            val item = JSONObject()
+                .put("code", code)
+                .put("symbol", symbol)
+                .put("name", row.optString("longname").ifEmpty { row.optString("shortname") })
+                .put("market", if (suffix == ".TWO") "上櫃" else "上市")
+            typeLabel(row).takeIf { it.isNotEmpty() }?.let { item.put("type", it) }
+            items.add(item)
+            if (items.size >= 8) break
+        }
+        if (items.isNotEmpty()) chineseNames(items.map { it.optString("symbol") })?.let { names ->
+            for (item in items) names[item.optString("symbol")]?.let { item.put("name", it) }
+        }
+        items.forEach { it.remove("symbol") }
+        return JSONObject().put("items", JSONArray(items))
+    }
+
+    /**
+     * K 線。[range] 例如 1y，[interval] 例如 1d。
+     * 回傳 {"code","range","interval","candles":[[epochSec,open,high,low,close,volume],...]}。
+     * 先試記得的市場，查不到（404 或沒有資料）再試另一個。
+     */
+    @Synchronized
+    fun history(code: String, range: String, interval: String): JSONObject {
+        for (suffix in orderedSuffixes(code)) {
+            val token = crumb?.let { "&crumb=${enc(it)}" }.orEmpty()
+            val res = http("GET", "$QUERY2/v8/finance/chart/$code$suffix?range=$range&interval=$interval$token")
+            if (res.body.contains("Will be right back")) return errorJson("Yahoo 正在維護，請稍後再試")
+            if (res.status == 429 || res.body.contains("Too Many Requests")) return rateLimit()
+            if (res.status == 404) continue
+            if (res.status !in 200..299) return errorJson("抓取 K 線失敗（HTTP ${res.status}），請稍後再試")
+            val candles = parseCandles(res.body) ?: continue
+            suffixCache[code] = suffix
+            return JSONObject()
+                .put("code", code)
+                .put("range", range)
+                .put("interval", interval)
+                .put("candles", candles)
+        }
+        return errorJson("查無此代號的 K 線資料")
+    }
+
+    /** 跳過任何欄位是 null 的那一根（停牌日、盤中尚未成交）。沒有任何一根就回 null。 */
+    private fun parseCandles(body: String): JSONArray? {
+        val result = try {
+            JSONObject(body).optJSONObject("chart")?.optJSONArray("result")?.optJSONObject(0)
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        val times = result.optJSONArray("timestamp") ?: return null
+        val q = result.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0) ?: return null
+        val cols = listOf("open", "high", "low", "close").map { q.optJSONArray(it) ?: return null }
+        val volume = q.optJSONArray("volume")
+        val out = JSONArray()
+        for (i in 0 until times.length()) {
+            val ohlc = cols.map { col -> col.optDouble(i, Double.NaN) }
+            if (ohlc.any { it.isNaN() }) continue
+            val row = JSONArray().put(times.optLong(i))
+            ohlc.forEach { row.put(Math.round(it * 100) / 100.0) }
+            row.put(volume?.optLong(i, 0L) ?: 0L)
+            out.put(row)
+        }
+        return if (out.length() == 0) null else out
+    }
+
+    /** 盡力而為：任何失敗都回 null，不影響搜尋結果，也不切換 crumb 策略。 */
+    private fun chineseNames(symbols: List<String>): Map<String, String>? {
+        val token = (ensureCrumb() as? Crumb.Token)?.value ?: return null
+        val res = try {
+            http(
+                "GET",
+                "$QUERY1/v7/finance/quote?symbols=${symbols.joinToString(",")}&formatted=false" +
+                    "&lang=zh-TW&region=TW&fields=longName,shortName&crumb=${enc(token)}"
+            )
+        } catch (_: IOException) {
+            return null
+        }
+        if (res.status !in 200..299) return null
+        val rows = try {
+            JSONObject(res.body).optJSONObject("quoteResponse")?.optJSONArray("result")
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        val names = HashMap<String, String>()
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val name = displayName(row)
+            if (name.isNotEmpty()) names[row.optString("symbol")] = name
+        }
+        return names
     }
 
     private fun orderedSuffixes(code: String): List<String> {
