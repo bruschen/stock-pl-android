@@ -35,6 +35,9 @@ jobs:
           curl -s -A "$UA" -o out/yahoo-2330-zh.json -w "%{http_code}\n" \
             "https://query1.finance.yahoo.com/v8/finance/chart/2330.TW?interval=1m&range=1d&lang=zh-Hant-TW&region=TW" > out/yahoo-2330-zh-status.txt || true
 
+      - name: Install test tools
+        run: pip install websocket-client
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

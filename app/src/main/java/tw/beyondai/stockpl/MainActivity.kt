@@ -1,6 +1,7 @@
 package tw.beyondai.stockpl
 
 import android.app.Activity
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -31,6 +32,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 只有 debug 版開放 WebView 偵錯，供自動化測試操作網頁
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
         webView = WebView(this)
         setContentView(webView)
 
