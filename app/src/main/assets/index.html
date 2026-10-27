@@ -358,13 +358,16 @@ function getQuoteViaBridge(code) {
   });
 }
 
-// 把 Android bridge 的 { code, name, price, time, source } 轉成與伺服器相同的格式
+// 把 Android bridge 的報價轉成與伺服器相同的格式。
+// 報價 API 仍是 Yahoo；market／type／taxHint 有值時，新版介面才顯示市場並帶入證交稅。
 function fromBridge(d) {
   if (d.error) return { error: d.error === "timeout" || d.error === "bridge" ? d.error : "upstream", message: d.message ?? d.error };
   return {
     symbol: d.code ?? null,
     name: d.name || null,
-    type: null, exchange: null, market: null,
+    type: d.type ?? null,
+    exchange: d.exchange ?? null,
+    market: d.market ?? null,
     price: Number(d.price),
     priceSource: "trade",
     asOf: null,
@@ -372,7 +375,7 @@ function fromBridge(d) {
     sourceLabel: d.source ?? null,
     isTrial: false, isHalted: false, isLimitUp: false, isLimitDown: false,
     previousClose: null,
-    taxHint: null, // bridge 沒有回證券類別，稅率由使用者自己選
+    taxHint: d.taxHint ?? null,
   };
 }
 
