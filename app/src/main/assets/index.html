@@ -2,105 +2,167 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>股票盈虧試算</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-/* Layout: two-pane workbench — order slip (inputs) left, settlement statement (result) right; stacks to one column on phone */
+/* Layout: phone app shell — app bar + verdict band pinned, inputs scroll beneath, GO fetches the quote */
 :root{
-  --bg:#f2f3f6; --surface:#ffffff; --ink:#1b2230; --muted:#5b6475; --line:#dde1e8;
+  --bg:#f2f3f6; --surface:#ffffff; --sunken:#e9ebf0; --ink:#1b2230; --muted:#5b6475; --line:#dde1e8;
   --accent:#24408e; --accent-soft:#e7ecf8;
   --gain:#c8312a; --gain-soft:#fbe9e7; --loss:#17804a; --loss-soft:#e2f3e9; --flat:#5b6475; --flat-soft:#eceef2;
+  --warn:#8a5a00; --warn-soft:#fdf0d8;
   --font-body:"Noto Sans TC",-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
   --font-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --tap:48px;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
-  :root{
-    --bg:#12151b; --surface:#1a1f28; --ink:#e7eaf0; --muted:#9aa3b3; --line:#2c333f;
+  :root:not([data-theme="light"]){
+    --bg:#12151b; --surface:#1a1f28; --sunken:#0d1015; --ink:#e7eaf0; --muted:#9aa3b3; --line:#2c333f;
     --accent:#93abee; --accent-soft:#202b47;
     --gain:#ff6f62; --gain-soft:#3a1e1c; --loss:#4ccb84; --loss-soft:#163020; --flat:#9aa3b3; --flat-soft:#232934;
+    --warn:#e0ae5a; --warn-soft:#352a16;
     color-scheme:dark;
   }
 }
+:root[data-theme="dark"]{
+  --bg:#12151b; --surface:#1a1f28; --sunken:#0d1015; --ink:#e7eaf0; --muted:#9aa3b3; --line:#2c333f;
+  --accent:#93abee; --accent-soft:#202b47;
+  --gain:#ff6f62; --gain-soft:#3a1e1c; --loss:#4ccb84; --loss-soft:#163020; --flat:#9aa3b3; --flat-soft:#232934;
+  --warn:#e0ae5a; --warn-soft:#352a16;
+  color-scheme:dark;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6;padding:32px 16px 48px}
-.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
-header{display:flex;flex-direction:column;gap:6px}
-h1{margin:0;font-size:1.75rem;font-weight:900;letter-spacing:.02em;text-wrap:balance}
-.rules{margin:0;color:var(--muted);font-size:.9rem}
-.rules b{color:var(--ink);font-weight:500;font-family:var(--font-num)}
-.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:20px;align-items:start}
-@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px;display:flex;flex-direction:column;gap:18px;min-width:0}
-.label-sm{font-size:.78rem;color:var(--muted);letter-spacing:.08em;font-weight:500}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip,.btn-link{font:inherit;font-size:.85rem;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
-.chip:hover,.btn-link:hover{border-color:var(--accent);color:var(--accent)}
-.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:500}
-.chip:focus-visible,.btn-link:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.field{display:flex;flex-direction:column;gap:6px}
-.field label{font-weight:500;font-size:.92rem}
-.field .unit{color:var(--muted);font-weight:400}
-input{font-family:var(--font-num);font-size:1.05rem;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%;font-variant-numeric:tabular-nums}
-input[aria-invalid="true"]{border-color:var(--gain)}
-.hint{font-size:.8rem;color:var(--muted);margin:0}
-.code-row{display:flex;gap:10px;align-items:center}
-.code-row input{flex:0 0 120px}
-.stock-name{font-weight:500;min-width:0;overflow-wrap:anywhere}
-.now-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-.mode{font-size:.75rem;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--flat-soft);color:var(--muted)}
-.mode.live{background:var(--accent-soft);color:var(--accent)}
-.status{font-size:.8rem;margin:0;color:var(--muted)}
-.status.bad{color:var(--gain)}
-.err{margin:0;color:var(--gain);font-size:.88rem;min-height:1.2em}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.6}
+.pad{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.app{max-width:460px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;border-inline:1px solid var(--line)}
+@media (max-width:480px){.app{border-inline:none}}
 
-.verdict{display:flex;flex-direction:column;gap:6px;padding:18px;border-radius:8px;background:var(--flat-soft)}
+.topstack{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.bar{background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;min-height:56px}
+.bar h1{margin:0;font-size:1.05rem;font-weight:700;letter-spacing:.02em}
+.src{font-size:.72rem;color:var(--muted);font-family:var(--font-num);text-align:right;line-height:1.3;white-space:nowrap}
+
+.verdict{background:var(--flat-soft);border-bottom:1px solid var(--line);padding-block:14px;display:flex;flex-direction:column;gap:2px}
 .verdict.gain{background:var(--gain-soft)} .verdict.loss{background:var(--loss-soft)}
-.pill{align-self:flex-start;font-size:.85rem;font-weight:700;padding:2px 10px;border-radius:999px;color:var(--surface);background:var(--flat)}
+.vtop{display:flex;align-items:center;gap:8px}
+.pill{font-size:.8rem;font-weight:700;padding:3px 11px;border-radius:999px;color:var(--surface);background:var(--flat);white-space:nowrap}
 .gain .pill{background:var(--gain)} .loss .pill{background:var(--loss)}
-.pl{font-family:var(--font-num);font-size:2.6rem;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--flat);overflow-wrap:anywhere}
+.ret{margin-left:auto;font-family:var(--font-num);font-size:1rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--flat)}
+.gain .ret{color:var(--gain)} .loss .ret{color:var(--loss)}
+.pl{font-family:var(--font-num);font-size:2.3rem;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--flat);overflow-wrap:anywhere}
 .gain .pl{color:var(--gain)} .loss .pl{color:var(--loss)}
-.pl small{font-size:1rem;font-weight:500;margin-left:4px}
-.insight{margin:0;font-size:.9rem}
-.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-@media (max-width:420px){.stats{grid-template-columns:minmax(0,1fr)}}
-.stat{display:flex;flex-direction:column;gap:2px;border-top:2px solid var(--line);padding-top:8px}
-.stat .v{font-family:var(--font-num);font-size:1.15rem;font-weight:500;font-variant-numeric:tabular-nums}
-.table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.pl small{font-size:.95rem;font-weight:500;margin-left:5px}
+.insight{margin:0;font-size:.82rem;color:var(--muted)}
+
+main{flex:1;padding-block:18px 36px;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:16px}
+.label-sm{font-size:.74rem;color:var(--muted);letter-spacing:.09em;font-weight:500}
+.field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.field label{font-weight:500;font-size:.9rem}
+.field .unit{color:var(--muted);font-weight:400}
+input[type=number],input[type=text]{font-family:var(--font-num);font-size:17px;min-height:var(--tap);padding:10px 14px;
+  border:1px solid var(--line);border-radius:10px;background:var(--sunken);color:var(--ink);width:100%;
+  font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[aria-invalid="true"]{border-color:var(--gain);background:var(--gain-soft)}
+input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hint{font-size:.78rem;color:var(--muted);margin:0}
+.err{margin:0;color:var(--gain);font-size:.85rem}
+.err:empty{display:none}
+
+/* 公司名稱查詢 */
+.org{display:flex;align-items:center;gap:8px;min-height:26px;font-size:.9rem;min-width:0;flex-wrap:wrap}
+.org .name{font-weight:700}
+.org .tag{font-family:var(--font-num);font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.org .note{color:var(--muted);font-size:.82rem}
+.org.looking .note::after{content:"…"}
+
+.go{font:inherit;font-family:var(--font-body);font-size:1.05rem;font-weight:700;min-height:54px;border:0;border-radius:12px;
+  background:var(--accent);color:#fff;cursor:pointer;letter-spacing:.06em;width:100%}
+.go:disabled{opacity:.45;cursor:not-allowed}
+:root[data-theme="dark"] .go,
+:root:not([data-theme="light"]) .go{color:#0d1015}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .go{color:#fff}}
+
+.quote{display:flex;flex-direction:column;gap:4px;background:var(--sunken);border-radius:10px;padding:12px 14px;font-size:.85rem}
+.quote .big{font-family:var(--font-num);font-size:1.4rem;font-weight:600;font-variant-numeric:tabular-nums}
+.quote .meta{color:var(--muted);font-size:.76rem;font-family:var(--font-num)}
+.flags{display:flex;gap:6px;flex-wrap:wrap}
+.flag{font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);font-weight:500}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-family:var(--font-body);font-size:.86rem;min-height:40px;padding:0 14px;border-radius:999px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.chip.quick{background:var(--sunken);font-family:var(--font-num);font-size:.82rem}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;font:inherit;font-size:.86rem;min-height:var(--tap);border:0;background:var(--surface);color:var(--muted);cursor:pointer;padding:0 8px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:500}
+
+.switch{display:flex;align-items:center;gap:12px;min-height:var(--tap);cursor:pointer}
+.switch input{position:absolute;opacity:0;width:0;height:0}
+.track{flex:0 0 46px;height:28px;border-radius:999px;background:var(--line);position:relative;transition:background .18s}
+.track::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--surface);transition:transform .18s}
+.switch input:checked + .track{background:var(--accent)}
+.switch input:checked + .track::after{transform:translateX(18px)}
+.switch input:focus-visible + .track{outline:2px solid var(--accent);outline-offset:2px}
+.switch .txt{font-size:.88rem;min-width:0}
+.switch .txt span{display:block;font-size:.76rem;color:var(--muted)}
+
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat{display:flex;flex-direction:column;gap:2px;border-top:2px solid var(--line);padding-top:8px;min-width:0}
+.stat .v{font-family:var(--font-num);font-size:1.1rem;font-weight:500;font-variant-numeric:tabular-nums}
+
+details.detail{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+details.detail summary{min-height:var(--tap);display:flex;align-items:center;gap:8px;padding:0 16px;cursor:pointer;font-size:.9rem;font-weight:500;list-style:none}
+details.detail summary::-webkit-details-marker{display:none}
+details.detail summary::after{content:"＋";margin-left:auto;color:var(--muted);font-family:var(--font-num)}
+details.detail[open] summary::after{content:"－"}
+.table-wrap{overflow-x:auto;padding:0 16px 14px}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
 td{padding:7px 0;border-bottom:1px solid var(--line);vertical-align:baseline}
 td.num{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:12px}
-td .f{display:block;font-size:.76rem;color:var(--muted);font-family:var(--font-num)}
+td .f{display:block;font-size:.74rem;color:var(--muted);font-family:var(--font-num)}
 tr.sub td{font-weight:700;border-bottom:2px solid var(--ink)}
-tr.head td{padding-top:14px;font-size:.78rem;color:var(--muted);letter-spacing:.08em;border-bottom:none}
+tr.head td{padding-top:13px;font-size:.74rem;color:var(--muted);letter-spacing:.08em;border-bottom:none}
 tr.fee td:first-child{padding-left:12px;color:var(--muted)}
-.foot{margin:0;font-size:.8rem;color:var(--muted)}
+
+.foot{margin:0;font-size:.78rem;color:var(--muted)}
+.legend{display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>股票盈虧試算</h1>
-    <p class="rules">上市普通股｜手續費 <b>0.1425%</b>，買賣都收，最低 <b>20</b> 元｜證交稅 <b>0.3%</b>，賣出才收｜尾數無條件捨去</p>
-  </header>
+<div class="app">
+  <div class="topstack">
+    <header class="bar pad">
+      <h1>股票盈虧試算</h1>
+      <p class="src" id="srcLabel">行情來源載入中</p>
+    </header>
 
-  <div class="grid">
-    <form class="panel" id="form" novalidate>
-      <div class="field">
-        <span class="label-sm">示範情境（使用假設價格）</span>
-        <div class="chips" id="chips"></div>
+    <div class="verdict pad" id="verdict" aria-live="polite">
+      <div class="vtop">
+        <span class="pill" id="pill">—</span>
+        <span class="ret" id="ret">—</span>
       </div>
+      <div class="pl" id="pl">—</div>
+      <p class="insight" id="insight">輸入代號、買入價、股數，按 GO 取得現價試算。</p>
+    </div>
+  </div>
 
+  <main class="pad">
+    <form class="card" id="form" novalidate>
       <div class="field">
         <label for="code">股票代號</label>
-        <div class="code-row">
-          <input id="code" inputmode="numeric" maxlength="6" autocomplete="off">
-          <span class="stock-name" id="stockName"></span>
-        </div>
+        <input id="code" type="text" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="2330">
+        <div class="org" id="org"><span class="note">輸入代號後自動查詢公司</span></div>
       </div>
 
       <div class="field">
@@ -111,69 +173,85 @@ tr.fee td:first-child{padding-left:12px;color:var(--muted)}
       <div class="field">
         <label for="shares">股數 <span class="unit">（股）</span></label>
         <input id="shares" type="number" inputmode="numeric" min="1" step="1">
+        <div class="chips" id="quick">
+          <button type="button" class="chip quick" data-shares="1000">1 張</button>
+          <button type="button" class="chip quick" data-shares="2000">2 張</button>
+          <button type="button" class="chip quick" data-shares="5000">5 張</button>
+        </div>
         <p class="hint">1 張 = 1,000 股，零股直接輸入股數</p>
       </div>
 
-      <div class="field">
-        <div class="now-head">
-          <label for="now">現價 <span class="unit">（元／股）</span> <span class="mode" id="modeTag">即時</span></label>
-          <button type="button" class="btn-link" id="liveBtn" hidden>改用即時報價</button>
-        </div>
+      <div class="field" id="manualWrap" hidden>
+        <label for="now">現價 <span class="unit">（元／股，手動輸入）</span></label>
         <input id="now" type="number" inputmode="decimal" min="0" step="0.01">
-        <p class="status" id="status"></p>
+        <p class="hint">取不到行情時請自行輸入，試算結果會標示為手動價格</p>
       </div>
 
+      <button type="submit" class="go" id="go">GO 取得現價並試算</button>
       <p class="err" id="err" role="alert"></p>
+
+      <div class="quote" id="quoteBox" hidden>
+        <span class="label-sm">現價</span>
+        <span class="big" id="qPrice">—</span>
+        <span class="meta" id="qMeta"></span>
+        <div class="flags" id="qFlags"></div>
+      </div>
     </form>
 
-    <section class="panel" aria-live="polite">
-      <div class="verdict" id="verdict">
-        <span class="pill" id="pill">—</span>
-        <div class="pl" id="pl">—</div>
-        <p class="insight" id="insight"></p>
+    <div class="card">
+      <div class="field">
+        <span class="label-sm">證券類別</span>
+        <div class="seg" id="kind">
+          <button type="button" data-tax="0.003" aria-pressed="true">一般股票<br>證交稅 0.3%</button>
+          <button type="button" data-tax="0.001" aria-pressed="false">股票型 ETF<br>證交稅 0.1%</button>
+        </div>
+        <p class="hint" id="kindHint">查到行情後會依類別自動建議，仍可自行切換</p>
       </div>
 
+      <label class="switch" for="feeOn">
+        <input type="checkbox" id="feeOn">
+        <span class="track"></span>
+        <span class="txt">計入手續費<span>0.1425%，買賣都收，最低 20 元。各券商折扣不同，預設不計。</span></span>
+      </label>
+    </div>
+
+    <div class="card">
+      <span class="label-sm">試算結果</span>
       <div class="stats">
-        <div class="stat"><span class="label-sm">報酬率</span><span class="v" id="ret">—</span></div>
         <div class="stat"><span class="label-sm">損益兩平價</span><span class="v" id="be">—</span></div>
         <div class="stat"><span class="label-sm">需上漲</span><span class="v" id="beUp">—</span></div>
       </div>
+    </div>
 
-      <div class="table-wrap">
-        <table><tbody id="detail"></tbody></table>
-      </div>
+    <details class="detail">
+      <summary>費用與金額明細</summary>
+      <div class="table-wrap"><table><tbody id="detail"></tbody></table></div>
+    </details>
 
-      <p class="foot">盈虧為「假設現在以現價全部賣出」的估算。
-        <span class="dot" style="background:var(--gain)"></span>紅＝賺
-        <span class="dot" style="background:var(--loss)"></span>綠＝賠（台股慣例）
-      </p>
-    </section>
-  </div>
+    <p class="foot">盈虧為「假設現在以現價全部賣出」的估算，行情僅供參考。
+      <span class="legend"><span><span class="dot" style="background:var(--gain)"></span>紅＝賺</span><span><span class="dot" style="background:var(--loss)"></span>綠＝賠</span></span>（台股慣例）
+    </p>
+  </main>
 </div>
 
 <script>
-const FEE_RATE = 0.001425, FEE_MIN = 20, TAX_RATE = 0.003;
-const REFRESH_MS = 15000;   // 即時模式每 15 秒更新一次
+const FEE_RATE = 0.001425, FEE_MIN = 20;
+let TAX_RATE = 0.003, FEE_ON = false;
+let quote = null;        // 目前這檔已取得的行情
+let quoteSymbol = null;  // 行情對應的代號，代號一改就作廢
+let manualPrice = false; // 是否改用手動現價
 
-// 示範情境：價格是假設的，切換後進入手動模式
-const SCENARIOS = [
-  { label: "整股獲利", code: "2330", name: "台積電", buy: 2200, shares: 1000, now: 2350 },
-  { label: "整股虧損", code: "2603", name: "長榮", buy: 215, shares: 1000, now: 200 },
-  { label: "小漲卻虧", code: "2412", name: "中華電", buy: 130, shares: 1000, now: 130.5 },
-  { label: "零股小額", code: "2317", name: "鴻海", buy: 205, shares: 5, now: 210 }
-];
-
-/* ---------- 計算 ---------- */
+const $ = id => document.getElementById(id);
 const floorInt = x => Math.floor(x + 1e-6);
 const r2 = x => Math.round(x * 100) / 100;
-const fee = amt => Math.max(FEE_MIN, floorInt(amt * FEE_RATE));
+const feeOf = amt => FEE_ON ? Math.max(FEE_MIN, floorInt(amt * FEE_RATE)) : 0;
 
 function calc(buy, shares, now) {
   const buyAmt = r2(buy * shares);
-  const buyFee = fee(buyAmt);
+  const buyFee = feeOf(buyAmt);
   const cost = r2(buyAmt + buyFee);
   const sellAmt = r2(now * shares);
-  const sellFee = fee(sellAmt);
+  const sellFee = feeOf(sellAmt);
   const tax = floorInt(sellAmt * TAX_RATE);
   const net = r2(sellAmt - sellFee - tax);
   const pl = r2(net - cost);
@@ -182,179 +260,304 @@ function calc(buy, shares, now) {
 
 function breakEven(buy, shares) {
   const cost = calc(buy, shares, buy).cost;
-  let p = cost / (shares * (1 - FEE_RATE - TAX_RATE));
-  if (p * shares * FEE_RATE < FEE_MIN) p = (cost + FEE_MIN) / (shares * (1 - TAX_RATE));
-  p = Math.floor(p * 100) / 100 - 0.05;
-  for (let i = 0; i < 2000; i++) {
+  let p = cost / (shares * (1 - (FEE_ON ? FEE_RATE : 0) - TAX_RATE));
+  p = Math.max(0.01, Math.floor(p * 100) / 100 - 0.05);
+  for (let i = 0; i < 4000; i++) {
     const q = r2(p + i * 0.01);
-    if (q > 0 && calc(buy, shares, q).net >= cost) return q;
+    if (calc(buy, shares, q).net >= cost) return q;
   }
   return null;
 }
 
-/* ---------- 畫面 ---------- */
-const $ = id => document.getElementById(id);
 const money = (x, sign) => {
   const s = Math.abs(x).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
   if (!sign) return (x < 0 ? "−" : "") + s;
   return (x > 0 ? "+" : x < 0 ? "−" : "") + s;
 };
 const pct = x => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x * 100).toFixed(2) + "%";
+const clockTime = iso => {
+  if (!iso) return "時間不明";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "時間不明"
+    : d.toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+};
 
-function render() {
+// ── 功能 1：輸入代號自動查公司 ───────────────────────────────
+let lookupTimer = null, lookupSeq = 0;
+
+function setOrg(html, cls = "") {
+  $("org").className = "org " + cls;
+  $("org").innerHTML = html;
+}
+
+function onCodeInput() {
+  const code = $("code").value.trim();
+  if (quoteSymbol && code !== quoteSymbol) invalidateQuote();
+  clearTimeout(lookupTimer);
+  if (!code) { setOrg('<span class="note">輸入代號後自動查詢公司</span>'); return; }
+  if (!/^[0-9A-Za-z]{4,6}$/.test(code)) { setOrg('<span class="note">代號為 4 到 6 碼</span>'); return; }
+  setOrg('<span class="note">查詢中</span>', "looking");
+  lookupTimer = setTimeout(() => lookup(code), 450);
+}
+
+async function lookup(code) {
+  const seq = ++lookupSeq;
+  const d = await getQuote(code);
+  if (seq !== lookupSeq) return; // 使用者又改了代號，丟棄這次結果
+  // 這一格只放簡短狀態，完整錯誤訊息留給 GO 下面的錯誤列
+  if (d.error) {
+    setOrg(`<span class="note">${d.error === "not_found" ? "查無此代號" : "查不到公司名稱"}</span>`);
+    return;
+  }
+  setOrg(`<span class="name">${d.name ?? code}</span>`
+    + `<span class="tag">${d.exchange ?? ""}${d.market ? " · " + d.market : ""}</span>`
+    + (d.type ? `<span class="tag">${d.type}</span>` : ""));
+  applyTaxHint(d);
+  // 名稱查到時行情也到手了，先存起來，按 GO 幾乎都能直接命中伺服器快取
+  quote = d; quoteSymbol = code;
+}
+
+function applyTaxHint(d) {
+  if (!d.taxHint) {
+    $("kindHint").textContent = `行情回傳類別為 ${d.type ?? "未知"}，無法自動判斷稅率，請自行確認`;
+    return;
+  }
+  TAX_RATE = d.taxHint.rate;
+  document.querySelectorAll("#kind button").forEach(b =>
+    b.setAttribute("aria-pressed", Number(b.dataset.tax) === TAX_RATE ? "true" : "false"));
+  $("kindHint").textContent = `已依行情類別帶入「${d.taxHint.label}」，仍可自行切換`;
+}
+
+// ── 取價管道：App 內走原生 bridge，網頁版走本機伺服器 ──────────
+// Android 端 (MainActivity.kt) 注入 window.AndroidQuote.fetch(code, id)，
+// 結果以 window.__quoteCallback(id, data) 回傳。
+const ANDROID = typeof window.AndroidQuote?.fetch === "function";
+let bridgeSeq = 0;
+const bridgePending = new Map();
+
+window.__quoteCallback = (id, data) => {
+  const resolve = bridgePending.get(id);
+  if (!resolve) return;
+  bridgePending.delete(id);
+  resolve(data ?? { error: "App 沒有回傳報價" });
+};
+
+function getQuoteViaBridge(code) {
+  return new Promise(resolve => {
+    const id = ++bridgeSeq;
+    bridgePending.set(id, resolve);
+    setTimeout(() => {
+      if (bridgePending.delete(id)) resolve({ error: "timeout", message: "取得報價逾時" });
+    }, 12000);
+    try {
+      window.AndroidQuote.fetch(code, id);
+    } catch {
+      bridgePending.delete(id);
+      resolve({ error: "bridge", message: "無法呼叫 App 的報價功能" });
+    }
+  });
+}
+
+// 把 Android bridge 的 { code, name, price, time, source } 轉成與伺服器相同的格式
+function fromBridge(d) {
+  if (d.error) return { error: d.error === "timeout" || d.error === "bridge" ? d.error : "upstream", message: d.message ?? d.error };
+  return {
+    symbol: d.code ?? null,
+    name: d.name || null,
+    type: null, exchange: null, market: null,
+    price: Number(d.price),
+    priceSource: "trade",
+    asOf: null,
+    asOfText: d.time && d.time !== "—" ? d.time : null,
+    sourceLabel: d.source ?? null,
+    isTrial: false, isHalted: false, isLimitUp: false, isLimitDown: false,
+    previousClose: null,
+    taxHint: null, // bridge 沒有回證券類別，稅率由使用者自己選
+  };
+}
+
+// 兩種伺服器端點都支援：server.mjs 的 /api/quote/:symbol，
+// 以及舊版 server.py 的 /api/quote?code=XXX。先試前者，不是這種伺服器才退到後者。
+async function fetchFromServer(code) {
+  const urls = [
+    `/api/quote/${encodeURIComponent(code)}`,
+    `/api/quote?code=${encodeURIComponent(code)}`,
+  ];
+  let last = { error: "network", message: "連不到伺服器，請確認服務是否還在執行" };
+  for (const url of urls) {
+    let res, d;
+    try {
+      res = await fetch(url, { cache: "no-store" });
+      d = await res.json();
+    } catch {
+      continue; // 這個端點不存在或回的不是 JSON，試下一個
+    }
+    if (res.ok) return d;
+    last = { error: d.error ?? "upstream", message: d.message ?? d.error ?? "讀取失敗" };
+    // 代號真的查不到就不必再試另一種端點
+    if (res.status !== 404 || d.error === "not_found") return last;
+  }
+  return last;
+}
+
+async function getQuote(code) {
+  if (ANDROID) return fromBridge(await getQuoteViaBridge(code));
+  return fetchFromServer(code);
+}
+
+function invalidateQuote() {
+  quote = null; quoteSymbol = null;
+  $("quoteBox").hidden = true;
+  resetVerdict("代號已變更，請重新按 GO 取得現價。");
+}
+
+// ── 功能 2：按 GO 取得現價並試算 ─────────────────────────────
+async function onGo(e) {
+  e.preventDefault();
+  const code = $("code").value.trim();
   const buy = parseFloat($("buy").value);
   const shares = Number($("shares").value);
-  const now = parseFloat($("now").value);
+
   const errs = [];
-  const bad = { buy: !(buy > 0), shares: !(Number.isInteger(shares) && shares >= 1), now: !(now > 0) };
+  const bad = {
+    code: !/^[0-9A-Za-z]{4,6}$/.test(code),
+    buy: !(buy > 0),
+    shares: !(Number.isInteger(shares) && shares >= 1),
+  };
+  if (bad.code) errs.push("請輸入 4 到 6 碼的股票代號");
   if (bad.buy) errs.push("買入價要大於 0");
   if (bad.shares) errs.push("股數要是 1 以上的整數");
-  if (bad.now) errs.push(mode === "live" ? "等待現價…" : "現價要大於 0");
-  for (const k in bad) $(k).setAttribute("aria-invalid", bad[k] && !(k === "now" && mode === "live") ? "true" : "false");
-  $("err").textContent = errs.join("；");
+  for (const k in bad) $(k).setAttribute("aria-invalid", bad[k] ? "true" : "false");
+  if (errs.length) { $("err").textContent = errs.join("；"); return; }
+  $("err").textContent = "";
 
-  const v = $("verdict");
-  if (errs.length) {
-    v.className = "verdict"; $("pill").textContent = "—"; $("pl").textContent = "—";
-    $("insight").textContent = ""; ["ret", "be", "beUp"].forEach(id => $(id).textContent = "—");
-    $("detail").innerHTML = ""; return;
+  if (manualPrice) {
+    const now = parseFloat($("now").value);
+    if (!(now > 0)) { $("err").textContent = "手動現價要大於 0"; $("now").setAttribute("aria-invalid", "true"); return; }
+    $("now").setAttribute("aria-invalid", "false");
+    showQuote({ price: now, manual: true });
+    compute(buy, shares, now);
+    return;
   }
 
+  $("go").disabled = true;
+  $("go").textContent = "取得行情中…";
+  const d = await getQuote(code);
+  $("go").disabled = false;
+  $("go").textContent = "GO 取得現價並試算";
+
+  if (d.error) {
+    $("err").textContent = d.message;
+    $("manualWrap").hidden = false;
+    manualPrice = true;
+    $("now").focus();
+    resetVerdict("取不到行情，請手動輸入現價後再按一次 GO。");
+    return;
+  }
+
+  quote = d; quoteSymbol = code;
+  applyTaxHint(d);
+  if (!$("org").querySelector(".name")) {
+    setOrg(`<span class="name">${d.name ?? code}</span><span class="tag">${d.exchange ?? ""}</span>`);
+  }
+  showQuote(d);
+  compute(buy, shares, d.price);
+}
+
+function showQuote(d) {
+  $("quoteBox").hidden = false;
+  $("qPrice").textContent = d.price.toLocaleString("zh-TW", { minimumFractionDigits: 2 });
+  const sourceText = {
+    trade: "最新成交價", close: "收盤價", previousClose: "昨收（今日尚無成交）", reference: "參考價",
+  };
+  const when = d.asOfText ?? clockTime(d.asOf);
+  $("qMeta").textContent = d.manual
+    ? "手動輸入"
+    : `${sourceText[d.priceSource] ?? "行情"} · ${when}${d.cached ? " · 快取" : ""}`;
+
+  const flags = [];
+  if (d.stale) flags.push("已達查詢上限，顯示稍早的價格");
+  if (d.isTrial) flags.push("試撮階段，非真實成交");
+  if (d.isHalted) flags.push("暫停交易");
+  if (d.isLimitUp) flags.push("漲停");
+  if (d.isLimitDown) flags.push("跌停");
+  if (d.priceSource === "previousClose" || d.priceSource === "reference") flags.push("非盤中價格");
+  $("qFlags").innerHTML = flags.map(f => `<span class="flag">${f}</span>`).join("");
+}
+
+function resetVerdict(msg) {
+  $("verdict").className = "verdict pad";
+  $("pill").textContent = "—"; $("pl").textContent = "—"; $("ret").textContent = "—";
+  $("insight").textContent = msg;
+  $("be").textContent = "—"; $("beUp").textContent = "—";
+  $("detail").innerHTML = "";
+}
+
+function compute(buy, shares, now) {
   const r = calc(buy, shares, now);
   const state = r.pl > 0 ? "gain" : r.pl < 0 ? "loss" : "flat";
-  v.className = "verdict " + state;
+  $("verdict").className = "verdict pad " + state;
   $("pill").textContent = { gain: "賺了", loss: "虧了", flat: "打平" }[state];
   $("pl").innerHTML = money(r.pl, true) + "<small>元</small>";
+  $("ret").textContent = pct(r.ret);
 
   const diff = r2(r.sellAmt - r.buyAmt);
-  let msg = `股價價差 ${money(diff, true)} 元，扣掉費用 ${money(r.fees)} 元，實拿 ${money(r.pl, true)} 元。`;
+  let msg = `股價價差 ${money(diff, true)} 元，扣掉${FEE_ON ? "手續費與證交稅" : "證交稅"} ${money(r.fees)} 元，實拿 ${money(r.pl, true)} 元。`;
   if (diff > 0 && r.pl < 0) msg += "股價有漲，但漲幅不夠付費用。";
   $("insight").textContent = msg;
 
-  $("ret").textContent = pct(r.ret);
   const be = breakEven(buy, shares);
   $("be").textContent = be ? be.toLocaleString("zh-TW", { minimumFractionDigits: 2 }) : "—";
   $("beUp").textContent = be ? pct(be / buy - 1) : "—";
 
   const n = x => x.toLocaleString("zh-TW", { maximumFractionDigits: 2 });
-  const minNote = amt => amt * FEE_RATE < FEE_MIN ? "未達 20 元，以最低 20 元計" : "× 0.1425%";
   const row = (label, val, f, cls = "") =>
     `<tr class="${cls}"><td>${label}${f ? `<span class="f">${f}</span>` : ""}</td><td class="num">${val}</td></tr>`;
+  const minNote = amt => FEE_ON && amt * FEE_RATE < FEE_MIN ? "未達 20 元，以最低 20 元計" : "× 0.1425%";
+  const taxPct = (TAX_RATE * 100).toFixed(1) + "%";
   $("detail").innerHTML =
     `<tr class="head"><td colspan="2">買進</td></tr>` +
     row("買進金額", money(r.buyAmt), `${n(buy)} × ${n(shares)} 股`) +
-    row("手續費", money(r.buyFee), minNote(r.buyAmt), "fee") +
+    (FEE_ON ? row("手續費", money(r.buyFee), minNote(r.buyAmt), "fee") : "") +
     row("買入成本", money(r.cost), "", "sub") +
     `<tr class="head"><td colspan="2">以現價賣出（估算）</td></tr>` +
     row("賣出金額", money(r.sellAmt), `${n(now)} × ${n(shares)} 股`) +
-    row("手續費", "−" + money(r.sellFee), minNote(r.sellAmt), "fee") +
-    row("證交稅", "−" + money(r.tax), "× 0.3%", "fee") +
+    (FEE_ON ? row("手續費", "−" + money(r.sellFee), minNote(r.sellAmt), "fee") : "") +
+    row("證交稅", "−" + money(r.tax), "× " + taxPct, "fee") +
     row("賣出淨額", money(r.net), "", "sub") +
-    row("費用合計", money(r.fees), "買進手續費 + 賣出手續費 + 證交稅");
+    row("費用合計", money(r.fees), FEE_ON ? "買進手續費 + 賣出手續費 + 證交稅" : "證交稅（未計手續費）");
 }
 
-/* ---------- 報價（即時 / 手動） ---------- */
-let mode = "live", timer = null, reqId = 0, debounce = null;
-
-function setStatus(text, cls = "") { const s = $("status"); s.textContent = text; s.className = "status " + cls; }
-
-function updateModeUI() {
-  const live = mode === "live";
-  $("modeTag").textContent = live ? "即時" : "手動";
-  $("modeTag").className = "mode" + (live ? " live" : "");
-  $("liveBtn").hidden = live;
+// 買入價／股數／稅率／手續費變動時，用手上已有的現價重算，不再打 API
+function recomputeIfPossible() {
+  const buy = parseFloat($("buy").value);
+  const shares = Number($("shares").value);
+  const price = manualPrice ? parseFloat($("now").value) : quote?.price;
+  if (!(buy > 0) || !(Number.isInteger(shares) && shares >= 1) || !(price > 0)) return;
+  compute(buy, shares, price);
 }
 
-// 報價來源：在 Android App 裡由原生端抓（AndroidQuote），在瀏覽器裡走本機 server.py
-const pendingQuotes = {}; let quoteSeq = 0;
-window.__quoteCallback = (id, data) => { const done = pendingQuotes[id]; if (done) { delete pendingQuotes[id]; done(data); } };
+// 標明這次執行的行情來源：App 內是原生 bridge（Yahoo，延遲），網頁版是富果
+$("srcLabel").textContent = ANDROID ? "App 報價 · 非即時" : "富果即時行情";
 
-function getQuote(code) {
-  if (window.AndroidQuote) {
-    return new Promise(resolve => {
-      const id = ++quoteSeq;
-      pendingQuotes[id] = resolve;
-      window.AndroidQuote.fetch(code, id);
-    }).then(data => { if (data.error) throw new Error(data.error); return data; });
-  }
-  return fetch("/api/quote?code=" + encodeURIComponent(code), { cache: "no-store" })
-    .then(async res => { const data = await res.json(); if (!res.ok) throw new Error(data.error || "抓取報價失敗"); return data; });
-}
-
-async function loadQuote() {
-  if (mode !== "live") return;
-  const code = $("code").value.trim().toUpperCase();
-  if (!/^\d{4,6}[A-Z]?$/.test(code)) {
-    $("stockName").textContent = "";
-    setStatus(code ? "代號格式不正確，例如 2330" : "輸入代號後會自動帶入報價", code ? "bad" : "");
-    return;
-  }
-  const id = ++reqId;
-  if (!$("now").value) setStatus("報價抓取中…");
-  try {
-    const data = await getQuote(code);
-    if (id !== reqId || mode !== "live") return;
-    $("now").value = data.price;
-    $("stockName").textContent = data.name || code;
-    setStatus(`報價時間 ${data.time}｜來源 ${data.source}，可能有延遲`);
-    render();
-  } catch (e) {
-    if (id !== reqId) return;
-    const msg = window.AndroidQuote ? e.message
-      : location.protocol === "file:"
-      ? "請先在終端機執行 python3 server.py，再開 http://localhost:8000"
-      : (e instanceof SyntaxError || e instanceof TypeError ? "連不到本機伺服器，請確認 server.py 還在執行" : e.message);
-    setStatus(msg + "。也可以直接手動輸入現價。", "bad");
-  }
-}
-
-function startLive() {
-  mode = "live"; updateModeUI();
-  $("now").value = ""; render();
-  clearInterval(timer);
-  timer = setInterval(() => { if (!document.hidden) loadQuote(); }, REFRESH_MS);
-  loadQuote();
-}
-
-function goManual(statusText) {
-  mode = "manual"; clearInterval(timer); reqId++; updateModeUI();
-  setStatus(statusText || "手動輸入的現價，不會自動更新");
-}
-
-function clearChips() { document.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false")); }
-
-function setScenario(i) {
-  const s = SCENARIOS[i];
-  $("code").value = s.code; $("buy").value = s.buy; $("shares").value = s.shares; $("now").value = s.now;
-  $("stockName").textContent = s.name;
-  goManual("示範用的假設價格，不是真實報價");
-  document.querySelectorAll(".chip").forEach((c, j) => c.setAttribute("aria-pressed", j === i ? "true" : "false"));
-  render();
-}
-
-SCENARIOS.forEach((s, i) => {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "chip"; b.textContent = s.label;
-  b.setAttribute("aria-pressed", "false");
-  b.addEventListener("click", () => setScenario(i));
-  $("chips").appendChild(b);
+$("code").addEventListener("input", onCodeInput);
+$("form").addEventListener("submit", onGo);
+["buy", "shares", "now"].forEach(id => $(id).addEventListener("input", recomputeIfPossible));
+$("quick").addEventListener("click", e => {
+  const b = e.target.closest("button[data-shares]");
+  if (!b) return;
+  $("shares").value = b.dataset.shares;
+  recomputeIfPossible();
 });
-
-$("code").addEventListener("input", () => {
-  clearChips();
-  if (mode !== "live") { startLive(); return; }
-  $("now").value = ""; render();
-  clearTimeout(debounce); debounce = setTimeout(loadQuote, 400);
+$("kind").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tax]");
+  if (!b) return;
+  TAX_RATE = parseFloat(b.dataset.tax);
+  document.querySelectorAll("#kind button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  $("kindHint").textContent = "已手動指定證交稅率";
+  recomputeIfPossible();
 });
-["buy", "shares"].forEach(id => $(id).addEventListener("input", () => { clearChips(); render(); }));
-$("now").addEventListener("input", () => { clearChips(); if (mode === "live") goManual(); render(); });
-$("liveBtn").addEventListener("click", () => { clearChips(); startLive(); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden && mode === "live") loadQuote(); });
-$("form").addEventListener("submit", e => e.preventDefault());
-
-// 開啟時：台積電、即時報價
-$("code").value = "2330"; $("buy").value = 2200; $("shares").value = 1000;
-startLive();
+$("feeOn").addEventListener("change", e => { FEE_ON = e.target.checked; recomputeIfPossible(); });
 </script>
 </body>
 </html>
